@@ -1,4 +1,4 @@
-# espool
+# pgxtransactor
 Package is aimed to simplify transaction management in your logic.
 
 ## General idea
@@ -7,7 +7,7 @@ Since `context.Context` is usually passed to execute any requests to database, i
 ## How to use
 Let's imagine we have `MyService` where transactional behavior is required and 2 repositories `OrderRepository` and `PaymentRepository` which must create order and payment consistently within single transaction, so if either first or second fail - no data is created at all and transaction is rolled back.
 
-Firstly, for object which requires transactional behavior you can define property with `transactor` interface, so now `esPool` will work with your transaction function:
+Firstly, for object which requires transactional behavior you can define property with `transactor` interface, so now `pgxtransactor` will work with your transaction function:
 ```go
 package service
 
@@ -16,7 +16,7 @@ type Transactor interface {
 }
 
 type MyService struct {
-	esPool espool.Transactor
+	pgxtransactor pgxtransactor.Transactor
 }
 ```
 Then, your database accessors (repositories in our case) must be embedded with concrete transaction runner interface - `PgxQuerryRunner`. For version `v2` no need to call `Runner` method of transaction runner (it is still possible though). Please, pay attention on `OrderRepository` method `CreateOrder` below:
@@ -32,10 +32,10 @@ type Payment struct {
 }
 
 type OrderRepository struct {
-	espool.PgxQueryRunner
+	pgxtransactor.PgxQueryRunner
 }
 
-func NewOrderRepository(r espool.PgxQueryRunner) *OrderRepository {
+func NewOrderRepository(r pgxtransactor.PgxQueryRunner) *OrderRepository {
 	return &OrderRepository{PgxQueryRunner: r}
 }
 
@@ -50,10 +50,10 @@ func (r *OrderRepository) CreateOrder(ctx context.Context, customerID, orderID i
 }
 
 type PaymentRepository struct {
-	espool.PgxQueryRunner
+	pgxtransactor.PgxQueryRunner
 }
 
-func NewPaymentRepository(r espool.PgxQueryRunner) *PaymentRepository {
+func NewPaymentRepository(r pgxtransactor.PgxQueryRunner) *PaymentRepository {
 	return &PaymentRepository{PgxQueryRunner: r}
 }
 
@@ -72,7 +72,7 @@ Now, you can use repositories in combination with transactor in `MyService`:
 package service
 
 type MyService struct {
-	trx espool.Transactor // in this example will be maintained via espool.NewPgxPool(...)
+	trx pgxtransactor.Transactor // in this example will be maintained via pgxtransactor.NewPgxPool(...)
 	orderRps OrderRepository // order repository added
 	paymentRps PaymentRepository // payment repository added
 }
@@ -121,11 +121,11 @@ func main() {
 	    panic(err)	
     }
 	
-    exec := espool.NewPgxPool(pgxPool) // same as espool.NewPgxPool(pgxPool).WithTracer(tracer.NewNilTracer()), read about tracers below
+    exec := pgxtransactor.NewPgxPool(pgxPool) // same as pgxtransactor.NewPgxPool(pgxPool).WithTracer(tracer.NewNilTracer()), read about tracers below
 
     payRps := PaymentRepository{trxExecutor: exec}
     orderRps := OrderRepository{trxExecutor: exec}
-    s := ShopService{payRps: payRps, orderRps: orderRps, esPool: exec}
+    s := ShopService{payRps: payRps, orderRps: orderRps, pgxtransactor: exec}
 
     err = s.CreateOrder(ctx, 12500, 123, 105)
     if err != nil{
@@ -136,10 +136,10 @@ func main() {
 ```
 
 ## Metrics tracing
-Also, you can use metrics tracers for OpenTelemetry or DataDog, in default case when you create `espool.PgxPool` it will be created with nil tracer `tracer.NilTracer`, but you can specify tracer by using `espool.NewPgxPool(pgxPool).WithTracer(tracer.Tracer)`.
+Also, you can use metrics tracers for OpenTelemetry or DataDog, in default case when you create `pgxtransactor.PgxPool` it will be created with nil tracer `tracer.NilTracer`, but you can specify tracer by using `pgxtransactor.NewPgxPool(pgxPool).WithTracer(tracer.Tracer)`.
 
 ### DataDog tracing
-For DataDog tracing, you must initialize the datadog exporter - `initDataDogExporter(...)` first, then create `espool.PgxPool` with `datadogTracer.DataDogTracer` from `gitlab.effective-soft.com/safqa/datadog-tracer` package:
+For DataDog tracing, you must initialize the datadog exporter - `initDataDogExporter(...)` first, then create `pgxtransactor.PgxPool` with `datadogTracer.DataDogTracer` from `gitlab.effective-soft.com/safqa/datadog-tracer` package:
 ```go
 package main
 
@@ -163,11 +163,11 @@ func main() {
         panic(err)
     }
 	
-    exec := espool.NewPgxPool(pgxPool).WithTracer(datadogTracer.NewTracer("service name"))
+    exec := pgxtransactor.NewPgxPool(pgxPool).WithTracer(datadogTracer.NewTracer("service name"))
 
     payRps := PaymentRepository{trxExecutor: exec}
     orderRps := OrderRepository{trxExecutor: exec}
-    s := ShopService{payRps: payRps, orderRps: orderRps, esPool: exec}
+    s := ShopService{payRps: payRps, orderRps: orderRps, pgxtransactor: exec}
 
     err = s.CreateOrder(ctx, 12500, 123, 105)
     if err != nil{
@@ -178,7 +178,7 @@ func main() {
 ```
 
 ### OpenTelemetry tracing
-For OpenTelemetry tracing, you must initialize the selected exporter(Zipkin exporter in my case) - `initZipkinExporter(...)` first, then create `espool.PgxPool` with `openTelemetryTracer.OpenTelemetryTracer` from `gitlab.effective-soft.com/safqa/open-telemetry-tracer` package:
+For OpenTelemetry tracing, you must initialize the selected exporter(Zipkin exporter in my case) - `initZipkinExporter(...)` first, then create `pgxtransactor.PgxPool` with `openTelemetryTracer.OpenTelemetryTracer` from `gitlab.effective-soft.com/safqa/open-telemetry-tracer` package:
 ```go
 package main
 
@@ -216,14 +216,14 @@ func main() {
         panic(err)
     }
 	
-    exec := espool.NewPgxPool(pgxPool).WithTracer(openTelemetryTracer.NewTracer(zExporter, "service name"))
+    exec := pgxtransactor.NewPgxPool(pgxPool).WithTracer(openTelemetryTracer.NewTracer(zExporter, "service name"))
     if err != nil{
         panic(err)
     }
 
     payRps := PaymentRepository{trxExecutor: exec}
     orderRps := OrderRepository{trxExecutor: exec}
-    s := ShopService{payRps: payRps, orderRps: orderRps, esPool: exec}
+    s := ShopService{payRps: payRps, orderRps: orderRps, pgxtransactor: exec}
 
     err = s.CreateOrder(ctx, 12500, 123, 105)
     if err != nil{
