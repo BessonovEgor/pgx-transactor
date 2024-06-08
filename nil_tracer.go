@@ -1,4 +1,4 @@
-package espool
+package pgxtransactor
 
 // Tracer represents tracer behavior
 //

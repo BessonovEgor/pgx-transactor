@@ -1,4 +1,4 @@
-package espool
+package pgxtransactor
 
 import (
 	"context"
